@@ -1,12 +1,13 @@
 import cv2
 import numpy as np
 import time
+from decouple import config
 
 # Список URL-адресов видеопотоков
 video_sources = [
-    "rtsp://lexa64reg:Sar270286@192.168.99.50:554/channel=1_stream=1",  # Пример URL 1
-    " rtsp://lexa64reg:Sar270286@192.168.99.50:554/channel=2_stream=1",  # Пример URL 2
-    "rtsp://lexa64reg:Sar270286@192.168.99.50:554/channel=3_stream=1"   # Пример URL 3
+    config('video_sources1',default=''),  # Пример URL 1
+    config('video_sources2',default=''),  # Пример URL 2
+    config('video_sources3',default='')   # Пример URL 3
 ]
 
 # Текущий индекс потока
@@ -18,7 +19,7 @@ def main():
     # Функция для корректного открытия потока
     def open_stream(source_index):
         cap = cv2.VideoCapture(video_sources[source_index])
-        time.sleep(4)  # Ждем инициализации
+        time.sleep(1)  # Ждем инициализации
         
         # Проверяем успешность открытия
         if not cap.isOpened():
@@ -49,7 +50,10 @@ def main():
                     continue
                 
                 # Отображение кадра
-                cv2.imshow(f'Video Stream (Source {current_source + 1})', frame)
+                cv2.namedWindow(f"Video Stream (Source {current_source + 1})", cv2.WND_PROP_FULLSCREEN)
+                cv2.setWindowProperty(f"Video Stream (Source {current_source + 1})", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+                cv2.imshow(f"Video Stream (Source {current_source + 1})", frame)
+
                 
                 # Обработка нажатий клавиш
                 key = cv2.waitKey(1)
@@ -60,6 +64,7 @@ def main():
                     if cap is not None:
                         cap.release()
                         cap = None
+                        cv2.destroyAllWindows()
                     
                     # Открываем новый
                     cap = open_stream(current_source)
