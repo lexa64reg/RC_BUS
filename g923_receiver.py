@@ -12,6 +12,7 @@ AXIS_MAX = 32767
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('0.0.0.0', LISTEN_PORT))
 
+
 AS5600_ADDR = 0x36
 ANGLE_REG = 0x0E
 bus = smbus2.SMBus(1)
