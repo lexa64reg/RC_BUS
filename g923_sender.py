@@ -11,13 +11,15 @@ SERVER_PORT = config('SERVER_PORT',default='5555')
 STEERING_MAX_DEGREES = 100  # угол поворота руля
 #--------------------------------
 
-# Инициализация
+#------Инициализация----------------
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 pygame.init()
 pygame.joystick.init()
 joysticks = []
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 #--------------------------------
+
+#---------------------------------
 def normalize_axis(val):
     return int(val * 32767)
 
@@ -27,7 +29,7 @@ def axis_to_percent(val):
 
 def axis_to_degrees(val):
     return int(val * STEERING_MAX_DEGREES)
-
+#----------------------------------
 
 run = True
 while run:
@@ -53,6 +55,7 @@ while run:
             'throttle': axis_to_percent(raw_throttle),
             'brake': axis_to_percent(raw_brake)
         }
+
         buttons = [joystick.get_button(i) for i in range(joystick.get_numbuttons())]
 
         payload = {
@@ -68,8 +71,8 @@ while run:
         throttle_pct = axis_to_percent(raw_throttle)
         brake_pct = axis_to_percent(raw_brake)
         pressed_buttons = [i for i, b in enumerate(buttons) if b]
-        
         print(f"[G923] Steering: {steer_deg:+4d}° | Throttle: {throttle_pct:3d}% | Brake: {brake_pct:3d}% | Buttons: {pressed_buttons}  {raw_throttle}")
+
         time.sleep(0.01)
         
         
