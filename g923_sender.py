@@ -10,6 +10,7 @@ SERVER_IP = config('SERVER_IP',default='192.168.10.127')
 SERVER_PORT = config('SERVER_PORT',default='5555')
 STEERING_MAX_DEGREES = 100  # угол поворота руля
 #--------------------------------
+
 # Инициализация
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 pygame.init()
