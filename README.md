@@ -1,10 +1,13 @@
 # RC BUS
-### A remotely controlled bus model
+
+A remotely controlled bus-car model
+
 
 
 ## modules
-pip\
-pygame\
-python-decouple\
-opencv-python\
+```python
+pygame
+python-decouple
+opencv-python
 smbus2
+```
