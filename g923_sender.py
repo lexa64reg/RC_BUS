@@ -6,8 +6,8 @@ import os
 from decouple import config
 
 #-------Настройки---------------
-SERVER_IP = config('SERVER_IP',default='192.168.10.127')
-SERVER_PORT = config('SERVER_PORT',default='5555')
+SERVER_IP = config('SERVER_IP')
+SERVER_PORT = config('SERVER_PORT')
 STEERING_MAX_DEGREES = 100  # угол поворота руля
 #--------------------------------
 
