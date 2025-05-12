@@ -3,13 +3,11 @@ import socket
 import json
 import time
 import os
-from decouple import config
 
 #-------Настройки---------------
-SERVER_IP = config('SERVER_IP')
-SERVER_PORT = config('SERVER_PORT')
+SERVER_IP = '192.168.10.127'
+SERVER_PORT = 5555
 STEERING_MAX_DEGREES = 100  # угол поворота руля
-#--------------------------------
 
 #------Инициализация----------------
 os.environ["SDL_VIDEODRIVER"] = "dummy"
@@ -19,7 +17,6 @@ joysticks = []
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 #--------------------------------
 
-#---------------------------------
 def normalize_axis(val):
     return int(val * 32767)
 

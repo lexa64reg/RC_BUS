@@ -8,17 +8,20 @@ import time
 LISTEN_PORT = 5555
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('0.0.0.0', LISTEN_PORT))
+
 #----------------------------------------------
 PWM_PIN_LEFT = 13  # Пин для ШИМ левого поворота
 PWM_PIN_RIGHT = 19  # Пин для ШИМ правого поворота
 ENCODER_ADDRESS = 0x36  # Адрес энкодера AS6500 по I2C
 ANGLE_REG = 0x0E  # Адрес чтения значения угла
 I2C_BUS = 1  # Номер шины I2C
+
 #-------------------------------------------
 old_min = -100
 old_max = 100
 new_min = 200
 new_max = 3500
+
 #---------------------------------------------
 
 
