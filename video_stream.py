@@ -10,7 +10,7 @@ video_sources = [
     config('video_sources3',default='')   # Пример URL 3
 ]
 
-# Текущий индекс потока
+# Текущий индекс потока____00
 current_source = 0
 
 def main():

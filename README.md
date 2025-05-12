@@ -5,7 +5,7 @@ A remotely controlled bus-car model
 
 
 ## modules
-```python
+```bash
 pygame
 python-decouple
 opencv-python
