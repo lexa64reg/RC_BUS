@@ -13,23 +13,33 @@ sock.bind(('0.0.0.0', LISTEN_PORT))
 #----------------------------------------------
 PWM_PIN_LEFT = 26  # Пин для ШИМ левого поворота
 PWM_PIN_RIGHT = 20  # Пин для ШИМ правого поворота
-#----------------------------------------------
+#-----------Передний левый мотор-----------------------------------
 PIN_FRONT_LEFT_DRIVE = 19
 PIN_FRONT_LEFT_REVERSE = 16
 PWM_PIN_FRONT_LEFT =21
-#----------------------------------------------
+#------------Передний правый мотор----------------------------------
 PIN_FRONT_RIGHT_DRIVE = 6
 PIN_FRONT_RIGHT_REVERSE = 12
 PWM_PIN_FRONT_RIGHT =5
+
+#------------Задний левый мотор----------------------------------
+PIN_FRONT_RIGHT_DRIVE = 22
+PIN_FRONT_RIGHT_REVERSE = 23
+PWM_PIN_FRONT_RIGHT =27
+#------------Залний правый мотор----------------------------------
+PIN_FRONT_RIGHT_DRIVE = 6
+PIN_FRONT_RIGHT_REVERSE = 12
+PWM_PIN_FRONT_RIGHT =5
+
 #----------------------------------------------
 ENCODER_ADDRESS = 0x36  # Адрес энкодера AS6500 по I2C
 ANGLE_REG = 0x0E  # Адрес чтения значения угла
 I2C_BUS = 1  # Номер шины I2C
 #-------------------------------------------
-old_min = 100
-old_max = -100
-new_min = 950
-new_max = 1840
+OLD_MIN = 100
+OLD_MAX = -100
+NEW_MIN = 950
+NEW_MAX = 1840
 #---------------------------------------------
 state_lock = threading.Lock()
 global_state = {
@@ -41,8 +51,8 @@ global_state = {
 
 selector = 1
 
-def convert_range(value, old_min, old_max, new_min, new_max):
-    return ((value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
+def convert_range(value, OLD_MIN, OLD_MAX, NEW_MIN, NEW_MAX):
+    return ((value - OLD_MIN) / (OLD_MAX - OLD_MIN)) * (NEW_MAX - NEW_MIN) + NEW_MIN
 
 class MotorController:
     def __init__(self):
@@ -189,7 +199,7 @@ try:
             pressed_buttons = global_state["buttons"]
 
         # Определяем угол поворота колес
-        target_angle = round(convert_range(steer, old_min, old_max, new_min, new_max))
+        target_angle = round(convert_range(steer, OLD_MIN, OLD_MAX, NEW_MIN, NEW_MAX))
 
         # Вычисляем разницу и ограничиваем шаг
         diff = target_angle - current_angle

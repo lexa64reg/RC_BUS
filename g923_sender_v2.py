@@ -69,6 +69,13 @@ try:
         brake_pct = axis_to_percent(normalize_axis(raw_brake))
         clutch_pct = axis_to_percent(normalize_axis(raw_clutch))
 
+
+        if throttle_pct > 90:
+            controller.play_bumpy_road_effect(0, 50)
+        else:
+            controller.stop_bumpy_road_effect(0)
+           
+
         controller.play_damper_force(0, int((100 - throttle_pct) / 2)) # Больше газ свободнее руль
         if throttle_pct > 10:
             controller.play_spring_force(0, 0, int(throttle_pct / 5), int(throttle_pct / 10))
