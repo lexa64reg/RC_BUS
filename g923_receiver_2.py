@@ -141,7 +141,6 @@ class MotorController:
         normalized_log_value = (log_value - math.log10(101)) / (math.log10(101) - math.log10(1))
         return ((1 - normalized_log_value) * 100) -100
 
-
     def brake(self, speed):
         if speed > 0:
           self.pwm_front_left.ChangeDutyCycle(self.logarifmic(speed))
