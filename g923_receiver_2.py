@@ -96,7 +96,7 @@ class MotorController:
             return None
 
     def turn_to_angle(self, target_angle, current_angle, tolerance):
-        if target_angle > 4096 or target_angle < 0 or current_angle is None:
+        if target_angle >= 4096 or target_angle <= 0 or current_angle is None:
             self.set_speed(0, 0)
             return
 
@@ -148,6 +148,7 @@ class MotorController:
         self.pwm_left.stop()
         self.pwm_right.stop()
         GPIO.cleanup()
+        sock.close()
 
 def packet_receiver():
     global global_state
