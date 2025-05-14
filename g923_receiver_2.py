@@ -4,6 +4,7 @@ import RPi.GPIO as GPIO
 import smbus2
 import time
 import threading
+import math
 
 #----Настройки-----------------------------------
 LISTEN_PORT = 5555
@@ -12,11 +13,15 @@ sock.bind(('0.0.0.0', LISTEN_PORT))
 #----------------------------------------------
 PWM_PIN_LEFT = 26  # Пин для ШИМ левого поворота
 PWM_PIN_RIGHT = 20  # Пин для ШИМ правого поворота
-
+#----------------------------------------------
 PIN_FRONT_LEFT_DRIVE = 19
 PIN_FRONT_LEFT_REVERSE = 16
 PWM_PIN_FRONT_LEFT =21
-
+#----------------------------------------------
+PIN_FRONT_RIGHT_DRIVE = 6
+PIN_FRONT_RIGHT_REVERSE = 12
+PWM_PIN_FRONT_RIGHT =5
+#----------------------------------------------
 ENCODER_ADDRESS = 0x36  # Адрес энкодера AS6500 по I2C
 ANGLE_REG = 0x0E  # Адрес чтения значения угла
 I2C_BUS = 1  # Номер шины I2C
@@ -31,7 +36,7 @@ global_state = {
     "steer": 0,
     "throttle": 0,
     "brake": 0,
-    "pressed_buttons": []
+    "buttons": []
 }
 
 selector = 1
@@ -51,25 +56,32 @@ class MotorController:
         GPIO.setup(PIN_FRONT_LEFT_DRIVE, GPIO.OUT)
         GPIO.setup(PIN_FRONT_LEFT_REVERSE, GPIO.OUT)
 
+        GPIO.setup(PWM_PIN_FRONT_RIGHT, GPIO.OUT)
+        GPIO.setup(PIN_FRONT_RIGHT_DRIVE, GPIO.OUT)
+        GPIO.setup(PIN_FRONT_RIGHT_REVERSE, GPIO.OUT)
+
         # Инициализация I2C
         self.bus = smbus2.SMBus(I2C_BUS)
 
         # Инициализация ШИМ
-        self.pwm_left = GPIO.PWM(PWM_PIN_LEFT, 100)  
-        self.pwm_right = GPIO.PWM(PWM_PIN_RIGHT, 100) 
+        self.pwm_left = GPIO.PWM(PWM_PIN_LEFT, 300)
+        self.pwm_right = GPIO.PWM(PWM_PIN_RIGHT, 300)
+
         self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 50)
-         
+        self.pwm_front_right = GPIO.PWM(PWM_PIN_FRONT_RIGHT, 50)
+
         self.pwm_left.start(0)
         self.pwm_right.start(0)
         
         self.pwm_front_left.start(0)
+        self.pwm_front_right.start(0)
 
     def set_speed(self, left_speed, right_speed):
         # left_speed и right_speed должны быть в диапазоне 0-100%
         if left_speed < 0 or left_speed > 100:
             raise ValueError("Скорость левого двигателя должна быть в диапазоне 0-100%")
         if right_speed < 0 or right_speed > 100:
-            raise ValueError("Скорость правого двигателя должна быть в диапазоне 0-100%")
+            raise ValueError("Скорость правого двигателя должна быть в  диапазоне 0-100%")
 
         self.pwm_left.ChangeDutyCycle(left_speed)
         self.pwm_right.ChangeDutyCycle(right_speed)
@@ -99,22 +111,38 @@ class MotorController:
             
     def drive(self, speed, selector):
         if selector == 1:
-          self.pwm_front_left.ChangeDutyCycle(speed)
+          self.pwm_front_left.ChangeDutyCycle(self.logarifmic(speed))
           GPIO.output(PIN_FRONT_LEFT_DRIVE, GPIO.HIGH)
           GPIO.output(PIN_FRONT_LEFT_REVERSE, GPIO.LOW)
+
+          self.pwm_front_right.ChangeDutyCycle(self.logarifmic(speed))
+          GPIO.output(PIN_FRONT_RIGHT_DRIVE, GPIO.HIGH)
+          GPIO.output(PIN_FRONT_RIGHT_REVERSE, GPIO.LOW)
           
         if selector == 0:
-          self.pwm_front_left.ChangeDutyCycle(speed)
+          self.pwm_front_left.ChangeDutyCycle(self.logarifmic(speed))
           GPIO.output(PIN_FRONT_LEFT_DRIVE, GPIO.LOW)
           GPIO.output(PIN_FRONT_LEFT_REVERSE, GPIO.HIGH)
+
+          self.pwm_front_right.ChangeDutyCycle(self.logarifmic(speed))
+          GPIO.output(PIN_FRONT_RIGHT_DRIVE, GPIO.LOW)
+          GPIO.output(PIN_FRONT_RIGHT_REVERSE, GPIO.HIGH)
           
-          
-        
+    def logarifmic(self, speed):
+        log_value = math.log10(101-speed)
+        normalized_log_value = (log_value - math.log10(101)) / (math.log10(101) - math.log10(1))
+        return ((1 - normalized_log_value) * 100) -100
+
+
     def brake(self, speed):
-        if speed >0:
-          self.pwm_front_left.ChangeDutyCycle(speed)
+        if speed > 0:
+          self.pwm_front_left.ChangeDutyCycle(self.logarifmic(speed))
           GPIO.output(PIN_FRONT_LEFT_DRIVE, GPIO.LOW)
           GPIO.output(PIN_FRONT_LEFT_REVERSE, GPIO.LOW)
+
+          self.pwm_front_right.ChangeDutyCycle(self.logarifmic(speed))
+          GPIO.output(PIN_FRONT_RIGHT_DRIVE, GPIO.LOW)
+          GPIO.output(PIN_FRONT_RIGHT_REVERSE, GPIO.LOW)
 
     def cleanup(self):
         self.pwm_left.stop()
@@ -131,7 +159,9 @@ def packet_receiver():
                 global_state["steer"] = state['axes']['steer']
                 global_state["throttle"] = state['axes']['throttle']
                 global_state["brake"] = state['axes']['brake']
-                global_state["pressed_buttons"] = [i for i, b in enumerate(state['buttons']) if b]
+                #global_state["buttons"] = [i for i, b in enumerate(state['buttons']) if b]
+                global_state["buttons"] = state['buttons']
+
         except Exception as e:
             print(f"Ошибка обработки пакета: {e}")
 
@@ -148,14 +178,14 @@ try:
 
     if current_angle is None:
         current_angle = 0
-    step = 40  # Максимальный шаг за один цикл (подберите под  механику)
+    step = 50  # Максимальный шаг за один цикл (подберите под  механику)
 
     while run:
         with state_lock:
             steer = global_state["steer"]
             throttle = global_state["throttle"]
             brake = global_state["brake"]
-            pressed_buttons = global_state["pressed_buttons"]
+            pressed_buttons = global_state["buttons"]
 
         # Определяем угол поворота колес
         target_angle = round(convert_range(steer, old_min, old_max, new_min, new_max))
@@ -168,7 +198,7 @@ try:
             move_angle = target_angle
 
         # Применяем движение
-        motor.turn_to_angle(move_angle, current_angle, 20)
+        motor.turn_to_angle(move_angle, current_angle, 45)
 
         # Даем небольшую задержку для завершения движения
         time.sleep(0.01)
@@ -178,9 +208,9 @@ try:
         if actual_angle is not None:
             current_angle = actual_angle
         
-        if pressed_buttons == [20]:
+        if pressed_buttons == [20] or pressed_buttons == [5]:
             selector = 0
-        if pressed_buttons == [19]:
+        if pressed_buttons == [19] or pressed_buttons == [4]:
             selector = 1    
         motor.drive(throttle, selector)
         motor.brake(brake)

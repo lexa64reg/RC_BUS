@@ -1,7 +1,7 @@
 import sys
 sys.path.append('/logidrivepy')
 from logidrivepy import LogitechController
-import pygame
+#import pygame
 import socket
 import json
 import time
@@ -9,9 +9,9 @@ import os
 from decouple import config
 
 #-------Настройки---------------
-SERVER_IP = '192.168.10.127'
+SERVER_IP = '192.168.15.254'
 SERVER_PORT = 5555
-STEERING_MAX_DEGREES = 360 # угол поворота руля
+STEERING_MAX_DEGREES = 180 # угол поворота руля
 DAMPER_FORCE = 100  # усилие 0-100%
 OLD_MIN = -STEERING_MAX_DEGREES
 OLD_MAX = STEERING_MAX_DEGREES
@@ -83,7 +83,7 @@ try:
         }
         payload = {
             'axes': axes,
-            'buttons': 'buttons'
+            'buttons': buttons
         }
 
         # Отправка
