@@ -1,7 +1,6 @@
 import sys
 sys.path.append('/logidrivepy')
 from logidrivepy import LogitechController
-#import pygame
 import socket
 import json
 import time
@@ -34,10 +33,12 @@ def axis_to_degrees(val):
 
 controller = LogitechController()
 if not controller.steering_initialize(False):
+    print(f"Руль не найден, выход")
     exit(1)
 
 if not controller.is_connected(0):
     controller.steering_shutdown()
+    print(f"Руль не найден, выход")
     exit(1)
 
 try:
@@ -91,6 +92,7 @@ try:
 
         print(f"[Steering: {steer_deg}° | Throttle: {throttle_pct:3d}% | Brake: {brake_pct:3d}%] | Clutch: {clutch_pct} | {buttons} ")
         time.sleep(0.01)
+        
 
 except KeyboardInterrupt:
     print('exit')
