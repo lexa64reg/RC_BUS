@@ -16,21 +16,19 @@ PWM_PIN_RIGHT = 20  # Пин для ШИМ правого поворота
 #-----------Передний левый мотор-----------------------------------
 PIN_FRONT_LEFT_DRIVE = 19
 PIN_FRONT_LEFT_REVERSE = 16
-PWM_PIN_FRONT_LEFT =21
+PWM_PIN_FRONT_LEFT = 21
 #------------Передний правый мотор----------------------------------
 PIN_FRONT_RIGHT_DRIVE = 6
 PIN_FRONT_RIGHT_REVERSE = 12
-PWM_PIN_FRONT_RIGHT =5
-
+PWM_PIN_FRONT_RIGHT = 5
 #------------Задний левый мотор----------------------------------
-PIN_FRONT_RIGHT_DRIVE = 22
-PIN_FRONT_RIGHT_REVERSE = 23
-PWM_PIN_FRONT_RIGHT =27
-#------------Залний правый мотор----------------------------------
-PIN_FRONT_RIGHT_DRIVE = 6
-PIN_FRONT_RIGHT_REVERSE = 12
-PWM_PIN_FRONT_RIGHT =5
-
+PIN_REAR_LEFT_DRIVE = 22
+PIN_REAR_LEFT_REVERSE = 23
+PWM_PIN_REAR_LEFT = 24
+#------------Задний правый мотор----------------------------------
+PIN_REAR_RIGHT_DRIVE = 17
+PIN_REAR_RIGHT_REVERSE = 18
+PWM_PIN_REAR_RIGHT = 27
 #----------------------------------------------
 ENCODER_ADDRESS = 0x36  # Адрес энкодера AS6500 по I2C
 ANGLE_REG = 0x0E  # Адрес чтения значения угла
