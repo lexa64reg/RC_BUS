@@ -8,7 +8,7 @@ import os
 from decouple import config
 
 #-------Настройки---------------
-SERVER_IP = '192.168.15.254'
+SERVER_IP = '192.168.15.252'
 SERVER_PORT = 5555
 STEERING_MAX_DEGREES = 180 # угол поворота руля
 DAMPER_FORCE = 100  # усилие 0-100%
@@ -62,8 +62,8 @@ try:
         clutch_pct = axis_to_percent(normalize_axis(raw_clutch))
 
 
-        if throttle_pct >  90:
-            controller.play_bumpy_road_effect(0, 50)
+        if throttle_pct > 98 or  brake_pct > 80:
+            controller.play_bumpy_road_effect(0, 2)
         else:
             controller.stop_bumpy_road_effect(0)
            

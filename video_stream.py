@@ -5,9 +5,8 @@ from decouple import config
 
 # Список URL-адресов видеопотоков
 video_sources = [
-    config('video_sources1',default=''),  # Пример URL 1
-    config('video_sources2',default=''),  # Пример URL 2
-    config('video_sources3',default='')   # Пример URL 3
+    "rtsp://admin:Passw0rd@192.168.15.108/cam/realmonitor?channel=1&subtype=0",
+    "rtsp://192.168.15.138:554/ch0_unicast_firststream"
 ]
 
 # Текущий индекс потока____00
