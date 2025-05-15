@@ -54,15 +54,7 @@ try:
         raw_clutch = state.lY
         raw_brake = state.lRz
 
-        buttons = []
-        j = 0
-        for i in range(0, 25):
-            if state.rgbButtons[i] != 0:
-                buttons.insert(j, i)
-                j += 1
-
-
-
+        buttons = [i for i in range(25) if state.rgbButtons[i] != 0]
 
         steer_deg = int(axis_to_degrees(normalize_axis(raw_steer)))
         throttle_pct = axis_to_percent(normalize_axis(raw_throttle))
