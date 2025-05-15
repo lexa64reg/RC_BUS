@@ -62,7 +62,7 @@ try:
         clutch_pct = axis_to_percent(normalize_axis(raw_clutch))
 
 
-        if throttle_pct > 90:
+        if throttle_pct >  90:
             controller.play_bumpy_road_effect(0, 50)
         else:
             controller.stop_bumpy_road_effect(0)
