@@ -4,13 +4,18 @@ import time
 from decouple import config
 
 # Список URL-адресов видеопотоков
+# video_sources = [
+#     "rtsp://admin:Passw0rd@192.168.15.108/cam/realmonitor?channel=1&subtype=0",
+#     "rtsp://192.168.15.138:554/ch0_unicast_firststream"
+# ]
+
 video_sources = [
-    config('video_sources1',default=''),  # Пример URL 1
-    config('video_sources2',default=''),  # Пример URL 2
-    config('video_sources3',default='')   # Пример URL 3
+    "rtsp://admin:Sar270286@192.168.88.169:554/profile3",
+    "rtsp://lexa64reg:Sar270286@192.168.99.50:554/channel=2_stream=1",
+     "rtsp://lexa64reg:Sar270286@192.168.99.50:554/channel=3_stream=1"
 ]
 
-# Текущий индекс потока
+# Текущий индекс потока____00
 current_source = 0
 
 def main():
