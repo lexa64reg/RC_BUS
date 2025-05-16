@@ -8,8 +8,8 @@ from queue import Queue
 import time
 
 # Настройки
-MAIN_STREAM_URL = "rtsp://admin:GLCCRT@192.168.99.41:554/h264"  # Основной RTSP-поток
-PIP_STREAM_URL = "rtsp://lexa64reg:Sar270286@192.168.99.50:554/channel=2_stream=1"   # PIP RTSP-поток
+MAIN_STREAM_URL = ""  # Основной RTSP-поток
+PIP_STREAM_URL = ""   # PIP RTSP-поток
 MAIN_WINDOW_NAME = "Main Stream"
 PIP_SCALE = 0.3  # Масштаб PIP-потока (30%)
 PIP_POSITION = (1, 1)  # Позиция PIP (x, y)
