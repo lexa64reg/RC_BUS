@@ -137,9 +137,10 @@ class MotorController:
           GPIO.output(PIN_FRONT_RIGHT_REVERSE, GPIO.HIGH)
           
     def logarifmic(self, speed):
-        log_value = math.log10(101-speed)
-        normalized_log_value = (log_value - math.log10(101)) / (math.log10(101) - math.log10(1))
-        return ((1 - normalized_log_value) * 100) -100
+        return 100 - 100 * math.log10(101 - speed) / math.log10(101)
+        #log_value = math.log10(101-speed)
+        #normalized_log_value = (log_value - math.log10(101)) / (math.log10(101) - math.log10(1))
+        #return ((1 - normalized_log_value) * 100) -100
 
     def brake(self, speed):
         if speed > 0:
