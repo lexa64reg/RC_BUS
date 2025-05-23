@@ -5,7 +5,6 @@ rtsp= config('MAIN_STREAM_URL')
 cap = cv2.VideoCapture(rtsp, cv2.CAP_FFMPEG)
 cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Small buffer for low latency
 
-
 while True:
     ret, frame = cap.read()
     if not ret:

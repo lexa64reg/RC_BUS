@@ -36,7 +36,7 @@ try:
                 break
             continue
         
-        # Optional: Resize frame for better performance (e.g., 50% of original size)
+        # Optional: Resize frame for better performance (e.g., 50% of original size )
         # frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
         
         cv2.imshow("RTSP Stream", frame)
