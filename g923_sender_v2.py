@@ -62,10 +62,13 @@ try:
         clutch_pct = axis_to_percent(normalize_axis(raw_clutch))
 
 
-        if brake_pct > 80:
+        if brake_pct > 80 or any(element in [4, 5, 19, 20] for element in buttons):
             controller.play_bumpy_road_effect(0, 2)
+            
         else:
             controller.stop_bumpy_road_effect(0)
+        
+        
         controller.play_leds(0, throttle_pct, 10, 140) 
 
         controller.play_damper_force(0, int((100 - throttle_pct) / 2)) # Больше газ свободнее руль
