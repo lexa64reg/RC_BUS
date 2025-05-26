@@ -5,6 +5,7 @@ import socket
 import json
 import time
 import os
+from plyer import notification
 from decouple import config, Csv
 
 #-------Настройки---------------
@@ -30,24 +31,45 @@ def axis_to_degrees(val):
     value = int(val * STEERING_MAX_DEGREES)
     return ((value - OLD_MIN) / (OLD_MAX - OLD_MIN)) * (NEW_MAX - NEW_MIN) + NEW_MIN
 #----------------------------------
+def show_notification(title, message):
+    notification.notify(
+        title=title,
+        message=message,
+        app_name="RC_BUS",
+        app_icon="bus.ico",
+        timeout=15  # время показа в секундах
+    )
+#----------------------------------
 
 controller = LogitechController()
 if not controller.steering_initialize(False):
     print(f"Руль не найден, выход")
+    show_notification("Ошибка!", "Руль не найден")
     exit(1)
 
 if not controller.is_connected(0):
     controller.steering_shutdown()
     print(f"Руль не найден, выход")
+    show_notification("Ошибка!", "Руль не найден")
     exit(1)
 
 try:
     controller.set_operating_range(0, STEERING_MAX_DEGREES)
     # controller.play_spring_force(0, 0, 100, 40)
+    
     run = True
     while run:
         controller.logi_update()
         state = controller.get_state_engines(0).contents
+        if not controller.is_connected(0):
+            print(f"Руль не найден, выход")
+            show_notification("Ошибка!", "Руль не найден")
+            steer_deg = 0
+            throttle_pct = 0
+            brake_pct = 0
+            clutch_pct = 0
+            controller.steering_shutdown()
+            exit(1)
 
         raw_steer = state.lX
         raw_throttle = state.lZ

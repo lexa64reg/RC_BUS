@@ -5,6 +5,7 @@ import smbus2
 import time
 import threading
 import math
+from decouple import config, Csv
 
 #----Настройки-----------------------------------
 LISTEN_PORT = config('LISTEN_PORT', cast=int)
