@@ -13,8 +13,9 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('0.0.0.0', LISTEN_PORT))
 sock.settimeout(1.0)
 #----------------------------------------------
-PWM_PIN_LEFT = 26  # Пин для ШИМ левого поворота
-PWM_PIN_RIGHT = 20  # Пин для ШИМ правого поворота
+PIN_STEERING_LEFT = 26  # Пин для левого поворота
+PIN_STEERING_RIGHT = 20  # Пин для правого поворота
+PWM_STEERING = 13 # Шим рулевого мотора
 #-----------Передний левый мотор-----------------------------------
 PIN_FRONT_LEFT_DRIVE = 19
 PIN_FRONT_LEFT_REVERSE = 16
@@ -41,7 +42,7 @@ OLD_MAX = -100
 # NEW_MIN = 950
 # NEW_MAX = 1840
 NEW_MIN = 100
-NEW_MAX = 4000
+NEW_MAX = 2100
 #---------------------------------------------
 state_lock = threading.Lock()
 global_state = {
@@ -53,16 +54,36 @@ global_state = {
 
 selector = 1
 
+# Параметры ПИД
+KP = 8.0
+KI = 0.5
+KD = 1.0
+INTEGRAL_LIMIT = 100
+MAX_DUTY = 100  # Максимальный рабочий цикл ШИМ (%)
+ANGLE_TOLERANCE = 25.0  # Допустимая погрешность угла (градусы)
+dt = 0.001
+
 def convert_range(value, OLD_MIN, OLD_MAX, NEW_MIN, NEW_MAX):
     return ((value - OLD_MIN) / (OLD_MAX - OLD_MIN)) * (NEW_MAX - NEW_MIN) + NEW_MIN
 
+
 class MotorController:
-    def __init__(self):
+    def __init__(self, kp, ki, kd, integral_limit, max_output):
+        
+        self.kp = kp  # Пропорциональный коэффициент
+        self.ki = ki  # Интегральный коэффициент
+        self.kd = kd  # Дифференциальный коэффициент
+        self.integral_limit = integral_limit  # Ограничение интегральной суммы
+        self.max_output = max_output  # Максимальный выходной сигнал
+        self.integral = 0
+        self.prev_error = 0 
+
         # Настройка GPIO
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(PWM_PIN_LEFT, GPIO.OUT)
-        GPIO.setup(PWM_PIN_RIGHT, GPIO.OUT)
+        GPIO.setup(PWM_STEERING, GPIO.OUT)
+        GPIO.setup(PIN_STEERING_LEFT, GPIO.OUT)
+        GPIO.setup(PIN_STEERING_RIGHT, GPIO.OUT)
         
         GPIO.setup(PWM_PIN_FRONT_LEFT, GPIO.OUT)
         GPIO.setup(PIN_FRONT_LEFT_DRIVE, GPIO.OUT)
@@ -76,27 +97,55 @@ class MotorController:
         self.bus = smbus2.SMBus(I2C_BUS)
 
         # Инициализация ШИМ
-        self.pwm_left = GPIO.PWM(PWM_PIN_LEFT, 300)
-        self.pwm_right = GPIO.PWM(PWM_PIN_RIGHT, 300)
-
+        self.pwm_steering = GPIO.PWM(PWM_STEERING, 300)
+        
         self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 50)
         self.pwm_front_right = GPIO.PWM(PWM_PIN_FRONT_RIGHT, 50)
 
-        self.pwm_left.start(0)
-        self.pwm_right.start(0)
-        
+        self.pwm_steering.start(0)
+                
         self.pwm_front_left.start(0)
         self.pwm_front_right.start(0)
+    
+    def compute(self, target, current, dt):
+        """Вычисление управляющего сигнала."""
+        # Вычисление ошибки
+        error = target - current
+        # # Нормализация ошибки (учитываем переход через 360°)
+        # if error > 180:
+        #     error -= 360
+        # elif error < -180:
+        #     error += 360
+        
+        # Пропорциональная часть
+        p_term = self.kp * error
+        
+        # Интегральная часть
+        self.integral += error * dt
+        self.integral = max(min(self.integral, self.integral_limit), -self.integral_limit)
+        i_term = self.ki * self.integral
+        
+        # Дифференциальная часть
+        d_term = self.kd * (error - self.prev_error) / dt
+        self.prev_error = error
+        
+        # Общий выход
+        output = p_term + i_term + d_term
+        output = max(min(output, self.max_output), -self.max_output)
+        
+        return abs(output)
 
-    def set_speed(self, left_speed, right_speed):
+    def set_speed(self, left_speed, right_speed, pwm_signal):
         # left_speed и right_speed должны быть в диапазоне 0-100%
         if left_speed < 0 or left_speed > 100:
             raise ValueError("Скорость левого двигателя должна быть в диапазоне 0-100%")
         if right_speed < 0 or right_speed > 100:
             raise ValueError("Скорость правого двигателя должна быть в  диапазоне 0-100%")
-
-        self.pwm_left.ChangeDutyCycle(left_speed)
-        self.pwm_right.ChangeDutyCycle(right_speed)
+        
+        print(f"{pwm_signal=}")
+        self.pwm_steering.ChangeDutyCycle(pwm_signal)
+        GPIO.output(PIN_STEERING_LEFT, left_speed)
+        GPIO.output(PIN_STEERING_RIGHT, right_speed)
 
     def read_encoder(self):
         try:
@@ -111,14 +160,15 @@ class MotorController:
         if target_angle >= 4096 or target_angle <= 0 or current_angle is None:
             self.set_speed(0, 0)
             return
-
+        pwm_signal = self.compute(target_angle, current_angle, dt)
+        #pwm_signal =100
         diff = target_angle - current_angle
         if abs(diff) <= tolerance:
-            self.set_speed(0, 0)  # Остановка
+            self.set_speed(0, 0, pwm_signal)  # Остановка
         elif diff > 0:
-            self.set_speed(98, 0)  # Поворот влево
+            self.set_speed(1, 0, pwm_signal)  # Поворот влево
         else:
-            self.set_speed(0, 98)  # Поворот вправо
+            self.set_speed(0, 1, pwm_signal)  # Поворот вправо
             
             
     def drive(self, speed, selector):
@@ -142,10 +192,7 @@ class MotorController:
           
     def logarifmic(self, speed):
         return 100 - 100 * math.log10(101 - speed) / math.log10(101)
-        #log_value = math.log10(101-speed)
-        #normalized_log_value = (log_value - math.log10(101)) / (math.log10(101) - math.log10(1))
-        #return ((1 - normalized_log_value) * 100) -100
-
+        
     def brake(self, speed):
         if speed > 0:
           self.pwm_front_left.ChangeDutyCycle(self.logarifmic(speed))
@@ -157,29 +204,12 @@ class MotorController:
           GPIO.output(PIN_FRONT_RIGHT_REVERSE, GPIO.LOW)
 
     def cleanup(self):
-        self.pwm_left.stop()
-        self.pwm_right.stop()
+        self.pwm_steering.stop()
+        self.pwm_front_left.stop()
+        self.pwm_front_right.stop()
         GPIO.cleanup()
         sock.close()
-"""#------------------------------------
-def packet_receiver():
-    global global_state
-    while True:
-        data, _ = sock.recvfrom(2048)
-        try:
-            state = json.loads(data)
-            with state_lock:
-                global_state["steer"] = state['axes']['steer']
-                global_state["throttle"] = state['axes']['throttle']
-                global_state["brake"] = state['axes']['brake']
-                global_state["buttons"] = state['buttons']
 
-        except Exception as e:
-            print(f"Ошибка обработки пакета: {e}")
-
-receiver_thread = threading.Thread(target=packet_receiver, daemon=True)
-receiver_thread.start()
-#------------------------------------"""
 def packet_receiver(stop_event):
     global global_state
     while not stop_event.is_set():
@@ -216,7 +246,7 @@ receiver_thread.start()
 print("[Receiver] G923 receiver started, waiting for data...")
 
 run = True
-motor = MotorController()
+motor = MotorController(KP, KI, KD, INTEGRAL_LIMIT, MAX_DUTY)
 current_angle = motor.read_encoder()
 try:
     run = True
@@ -246,7 +276,7 @@ try:
         motor.turn_to_angle(move_angle, current_angle, 45)
 
         # Даем небольшую задержку для завершения движения
-        time.sleep(0.01)
+        time.sleep(dt)
 
         # Читаем актуальный угол после движения
         actual_angle = motor.read_encoder()
