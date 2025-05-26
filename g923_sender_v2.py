@@ -9,7 +9,7 @@ from plyer import notification
 from decouple import config, Csv
 
 #-------Настройки---------------
-SERVER_IP = config('SERVER_IP')
+SERVER_IP = config('SERVER_IP2')
 SERVER_PORT = config('SERVER_PORT', cast=int)
 STEERING_MAX_DEGREES = 180 # угол поворота руля
 DAMPER_FORCE = 100  # усилие 0-100%

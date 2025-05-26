@@ -11,6 +11,7 @@ from decouple import config, Csv
 LISTEN_PORT = config('LISTEN_PORT', cast=int)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('0.0.0.0', LISTEN_PORT))
+sock.settimeout(1.0)
 #----------------------------------------------
 PWM_PIN_LEFT = 26  # Пин для ШИМ левого поворота
 PWM_PIN_RIGHT = 20  # Пин для ШИМ правого поворота
@@ -158,7 +159,7 @@ class MotorController:
         self.pwm_right.stop()
         GPIO.cleanup()
         sock.close()
-
+"""#------------------------------------
 def packet_receiver():
     global global_state
     while True:
@@ -169,7 +170,6 @@ def packet_receiver():
                 global_state["steer"] = state['axes']['steer']
                 global_state["throttle"] = state['axes']['throttle']
                 global_state["brake"] = state['axes']['brake']
-                #global_state["buttons"] = [i for i, b in enumerate(state['buttons']) if b]
                 global_state["buttons"] = state['buttons']
 
         except Exception as e:
@@ -177,6 +177,39 @@ def packet_receiver():
 
 receiver_thread = threading.Thread(target=packet_receiver, daemon=True)
 receiver_thread.start()
+#------------------------------------"""
+def packet_receiver(stop_event):
+    global global_state
+    while not stop_event.is_set():
+        try:
+            data, _ = sock.recvfrom(2048)
+            try:
+                state = json.loads(data.decode('utf-8'))
+                with state_lock:
+                    global_state["steer"] = state['axes'].get('steer', global_state.get('steer', 0))
+                    global_state["throttle"] = state['axes'].get('throttle', global_state.get('throttle', 0))
+                    global_state["brake"] = state['axes'].get('brake', global_state.get('brake', 0))
+                    global_state["buttons"] = state.get('buttons', global_state.get('buttons', {}))
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+            except KeyError as e:
+                print(f"Missing key in JSON data: {e}")
+        except socket.error as e:
+            if not stop_event.is_set():
+                print(f"Socket error: {e}")
+                global_state = {
+                    "steer": 0,
+                    "throttle": 0,
+                    "brake": 0,
+                    "buttons": []
+                }
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            
+stop_event = threading.Event()
+receiver_thread = threading.Thread(target=packet_receiver, args=(stop_event,), daemon=True)
+receiver_thread.start()
+
 
 print("[Receiver] G923 receiver started, waiting for data...")
 
