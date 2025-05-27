@@ -56,9 +56,10 @@ if not controller.is_connected(0):
 try:
     controller.set_operating_range(0, STEERING_MAX_DEGREES)
     # controller.play_spring_force(0, 0, 100, 40)
-    
+    index=1
     run = True
     while run:
+        index += 1
         controller.logi_update()
         state = controller.get_state_engines(0).contents
         if not controller.is_connected(0):
@@ -113,8 +114,8 @@ try:
 
         # Отправка
         sock.sendto(json.dumps(payload).encode(), (SERVER_IP, SERVER_PORT))
-
-        print(f"[Steering: {steer_deg}° | Throttle: {throttle_pct:3d}% | Brake: {brake_pct:3d}%] | Clutch: {clutch_pct} | {buttons} ")
+        if index % 100 == 0:
+            print(f"[Steering: {steer_deg:4d}° | Throttle: {throttle_pct:3d}% | Brake: {brake_pct:3d}%] | Clutch: {clutch_pct:3d} | {buttons} ")
         time.sleep(0.01)
         
 
