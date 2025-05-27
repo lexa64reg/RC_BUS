@@ -9,7 +9,7 @@ from decouple import config
 
 # Настройки
 LISTEN_PORT = config('LISTEN_PORT', cast=int)
-TIMEOUT_SECONDS = 2.0  # Время ожидания новых данных (секунды)
+TIMEOUT_SECONDS = 2.0  # Время ожидания новых данных
 
 # Пины для BTS7960
 PIN_STEERING_LEFT = 26
