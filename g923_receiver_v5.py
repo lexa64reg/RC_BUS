@@ -6,23 +6,13 @@ import time
 import threading
 import math
 from decouple import config
-import paramiko
 
 # Настройки
 LISTEN_PORT = config('LISTEN_PORT', cast=int)
 TIMEOUT_SECONDS = 2.0  # Время ожидания новых данных
-
-# Параметры подключения к роутеру
-HOST = config('MIKROTIK_IP')  
-USERNAME = config('MIKROTIK_LOGIN')  
-PASSWORD = config('MIKROTIK_PASS')        
-PORT = config('MIKROTIK_PORT')           
+  
 
 # Пины для BTS7960
-PIN_STEERING_LEFT = 26
-PIN_STEERING_RIGHT = 20
-PWM_STEERING = 13
-
 PIN_FRONT_LEFT_DRIVE = 19
 PIN_FRONT_LEFT_REVERSE = 16
 PWM_PIN_FRONT_LEFT = 21
@@ -39,26 +29,15 @@ PIN_REAR_RIGHT_DRIVE = 17
 PIN_REAR_RIGHT_REVERSE = 18
 PWM_PIN_REAR_RIGHT = 27
 
-# Конфигурация I2C для AS5600
-ENCODER_ADDRESS = 0x36
-ANGLE_REG = 0x0C  # RAW ANGLE
-I2C_BUS = 1
+# Пины для JMC integrated Stepper Motor
+PUL_PIN = 20  # Пин для сигнала PUL (импульс)
+DIR_PIN = 26  # Пин для сигнала DIR (направление)
+ENA_PIN = 13  # Пин сигнала Enable(Reset)
 
-# Диапазон преобразования угла в значения 12 бит энкодера
-OLD_MIN = -100
-OLD_MAX = 100
-NEW_MIN = 1050
-NEW_MAX = 1780
-
-# Параметры ПИД
-KP = 0.5
-KI = 0.9
-KD = 0.3
-INTEGRAL_LIMIT = 100
-MAX_DUTY = 100
-ANGLE_TOLERANCE = 80
-STEP = 40
-DT = 0.001
+# Параметры step двигателя 
+STEPS_PER_REVOLUTION = 4000  # Количество шагов на полный оборот (зависит от двигателя)
+DELAY = 0.000001  # Задержка между импульсами (в секундах), влияет на скорость
+DELAY_INIT = 0.001  # Задержка для инициализации
 
 # Глобальное состояние
 global_state = {
@@ -70,6 +49,7 @@ global_state = {
 state_lock = threading.Lock()
 last_packet_time = time.time()
 selector = 1  # Глобальная переменная для направления движения
+current_steps = 500 # Глобальная переменная количестава начальных шагов
 
 # Инициализация UDP-сокета
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -78,53 +58,12 @@ sock.settimeout(2.0)
 
 def convert_range(value, old_min, old_max, new_min, new_max):
     return ((value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
-def get_voltage():
-    try:
-        # Создаем SSH-клиент
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-        # Подключаемся к роутеру
-        client.connect(HOST, PORT, USERNAME, PASSWORD)
-
-        # Выполняем команду для получения напряжения
-        # Команда в RouterOS: /system health print
-        stdin, stdout, stderr = client.exec_command("/system health print")
-
-        # Читаем вывод команды
-        output = stdout.read().decode('utf-8')
-
-        # Ищем строку с напряжением
-        for line in output.splitlines():
-            if "voltage" in line.lower():
-                print(f"Напряжение питания: {line.strip()}")
-                break
-        else:
-            print("Информация о напряжении не найдена.")
-
-        # Закрываем соединение
-        client.close()
-
-    except Exception as e:
-        print(f"Ошибка: {str(e)}")
 
 class MotorController:
-    def __init__(self, kp, ki, kd, dt, integral_limit, max_output):
-        self.kp = kp
-        self.ki = ki
-        self.kd = kd
-        self.dt = dt
-        self.integral_limit = integral_limit
-        self.max_output = max_output
-        self.integral = 0
-        self.prev_error = 0
-
+    def __init__(self):
         # Настройка GPIO
         GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)
-        GPIO.setup(PWM_STEERING, GPIO.OUT)
-        GPIO.setup(PIN_STEERING_LEFT, GPIO.OUT)
-        GPIO.setup(PIN_STEERING_RIGHT, GPIO.OUT)
         GPIO.setup(PWM_PIN_FRONT_LEFT, GPIO.OUT)
         GPIO.setup(PIN_FRONT_LEFT_DRIVE, GPIO.OUT)
         GPIO.setup(PIN_FRONT_LEFT_REVERSE, GPIO.OUT)
@@ -137,72 +76,49 @@ class MotorController:
         GPIO.setup(PWM_PIN_REAR_RIGHT, GPIO.OUT)
         GPIO.setup(PIN_REAR_RIGHT_DRIVE, GPIO.OUT)
         GPIO.setup(PIN_REAR_RIGHT_REVERSE, GPIO.OUT)
-
-        # Инициализация I2C
-        self.bus = smbus2.SMBus(I2C_BUS)
+        GPIO.setup(PUL_PIN, GPIO.OUT)
+        GPIO.setup(DIR_PIN, GPIO.OUT)
+        GPIO.setup(ENA_PIN, GPIO.OUT)
+        
+        # Сброс возможных ошибок на шаговом моторе
+        GPIO.output(ENA_PIN, GPIO.HIGH)
+        time.sleep(0.5)
+        GPIO.output(ENA_PIN, GPIO.LOW)
 
         # Инициализация ШИМ
-        self.pwm_steering = GPIO.PWM(PWM_STEERING, 100) 
         self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 50)
         self.pwm_front_right = GPIO.PWM(PWM_PIN_FRONT_RIGHT, 50)
         self.pwm_rear_left = GPIO.PWM(PWM_PIN_REAR_LEFT, 50)
         self.pwm_rear_right = GPIO.PWM(PWM_PIN_REAR_RIGHT, 50)
-
-        self.pwm_steering.start(0)
         self.pwm_front_left.start(0)
         self.pwm_front_right.start(0)
         self.pwm_rear_left.start(0)
         self.pwm_rear_right.start(0)
 
-    def calc_pwm(self, target, current, dt):
-        error = target - current
-        p_term = self.kp * error
-        self.integral += error * dt
-        self.integral = max(min(self.integral, self.integral_limit), -self.integral_limit)
-        i_term = self.ki * self.integral
-        d_term = self.kd * (error - self.prev_error) / dt
-        self.prev_error = error
-        output = p_term + i_term + d_term
-        output = abs(max(min(output, self.max_output), -self.max_output))
-        return int(output)
-
-    def set_speed(self, left_speed, right_speed, pwm_signal):
-        if pwm_signal < 0 or pwm_signal > 100:
-            print(f"\n {pwm_signal=} двигателя должна быть в диапазоне 0-100%")
-            raise ValueError("Скорость двигателя должна быть в диапазоне 0-100%")
-        self.pwm_steering.ChangeDutyCycle(pwm_signal)
-        GPIO.output(PIN_STEERING_LEFT, left_speed)
-        GPIO.output(PIN_STEERING_RIGHT, right_speed)
-
-    def read_encoder(self):
-        try:
-            data = self.bus.read_i2c_block_data(ENCODER_ADDRESS, ANGLE_REG, 2)
-            position = (data[0] << 8) | data[1]
-            return position
-        except Exception as e:
-            print(f"\nОшибка чтения энкодера: {e}")
-            return None
-
-    def turn_to_angle(self, target_angle, tolerance):
-        current_angle = self.read_encoder()
-        if current_angle is None:
-            self.set_speed(0, 0, 0)
-            return
-        diff = target_angle - current_angle
-        pwm_signal = self.calc_pwm(target_angle, current_angle, self.dt)
-        # print(f"{current_angle=:4d}", end = " | ")
-        # print(f"{diff=:4d}", end=" | ")
-        # print(f"{pwm_signal=:4d}", end="\n")
-        if target_angle >= 4000 or target_angle <= 100 or abs(diff) <= tolerance:
-            self.set_speed(0, 0, 0)
-            return pwm_signal, diff, current_angle
-        if abs(diff) > STEP:
-            target_angle = current_angle + STEP if diff > 0 else current_angle - STEP
-            if diff > 0:
-                self.set_speed(1, 0, pwm_signal)  # Поворот влево
-            else:
-                self.set_speed(0, 1, pwm_signal)  # Поворот вправо
-        return pwm_signal, diff, current_angle
+    def rotate_to_position(self, steer):
+        global current_steps
+        # Преобразование сигнала в угол (45°)
+        target_angle = (steer / 100.0) * 45.0
+        # Вычисление целевого количества шагов
+        target_steps = int((target_angle / 360.0) * STEPS_PER_REVOLUTION)
+        # Вычисление необходимого перемещения
+        steps_to_move = target_steps - current_steps
+        if steps_to_move == 0:
+            return  # Нет необходимости двигаться
+        # Определение направления
+        direction = GPIO.HIGH if steps_to_move < 0 else GPIO.LOW
+        GPIO.output(DIR_PIN, direction)
+        GPIO.output(ENA_PIN, GPIO.LOW)
+        
+        # Выполнение шагов
+        for _ in range(abs(steps_to_move)):
+            GPIO.output(PUL_PIN, GPIO.HIGH)
+            time.sleep(DELAY)
+            GPIO.output(PUL_PIN, GPIO.LOW)
+            time.sleep(DELAY)
+        
+        # Обновление текущей позиции
+        current_steps = target_steps     
     
     def drive(self, speed, selector):
         speed = self.logarithmic(speed)
@@ -240,7 +156,7 @@ class MotorController:
             GPIO.output(PIN_REAR_RIGHT_REVERSE, GPIO.HIGH)
 
     def brake(self, speed):
-        if speed > 0:
+        if speed >= 1:
             speed = self.logarithmic(speed)
             self.pwm_front_left.ChangeDutyCycle(speed)
             GPIO.output(PIN_FRONT_LEFT_DRIVE, GPIO.LOW)
@@ -264,7 +180,7 @@ class MotorController:
     def cleanup(self):
         print(f"Starting motor cleanup")
         try:
-            for pwm in [self.pwm_steering, self.pwm_front_left, self.pwm_front_right,
+            for pwm in [self.pwm_front_left, self.pwm_front_right,
                        self.pwm_rear_left, self.pwm_rear_right]:
                 try:
                     pwm.ChangeDutyCycle(0)
@@ -301,14 +217,25 @@ def packet_receiver(stop_event):
         except Exception as e:
             print(f"\nНепредвиденная ошибка: {e}")
 
+def step_motor_init(): # Выворачиваем колеса влево до упора и ошибки положения и делаем ресет мотора
+    for _ in range(abs(2500)):
+        GPIO.output(PUL_PIN, GPIO.HIGH)
+        time.sleep(DELAY_INIT)
+        GPIO.output(PUL_PIN, GPIO.LOW)
+        time.sleep(DELAY_INIT)
+    GPIO.output(ENA_PIN, GPIO.HIGH)
+    time.sleep(0.5)
+    GPIO.output(ENA_PIN, GPIO.LOW)
+
 def main():
     global selector
     stop_event = threading.Event()
     receiver_thread = threading.Thread(target=packet_receiver, args=(stop_event,), daemon=False)
     receiver_thread.start()
-    motor = MotorController(KP, KI, KD, DT, INTEGRAL_LIMIT, MAX_DUTY)
+    motor = MotorController()
     index=1
-    
+    step_motor_init()
+    time.sleep(0.5)  
     
     try:
         while True:
@@ -318,42 +245,44 @@ def main():
                 brake = global_state["brake"]
                 pressed_buttons = global_state["buttons"]
 
-            
             # Управление движением
-            target_angle = round(convert_range(steer, OLD_MIN, OLD_MAX, NEW_MIN, NEW_MAX))
-            pwm_signal, diff, current_angle=motor.turn_to_angle(target_angle, ANGLE_TOLERANCE)
-            motor.drive(throttle, selector)
+            motor.rotate_to_position(steer)
+            if brake <= 5:
+                motor.drive(throttle, selector)
             motor.brake(brake)
-            
-            # Обработка кнопок для переключения направления
+                       
+            # Обработка кнопок
             if pressed_buttons == [20] or pressed_buttons == [5]:
                 selector = 0  # Назад
             elif pressed_buttons == [19] or pressed_buttons == [4]:
                 selector = 1  # Вперед
-            index += 1
+            if pressed_buttons ==[0, 1, 2, 3, 11]:
+                GPIO.output(ENA_PIN, GPIO.HIGH)
+                time.sleep(0.001)
+                GPIO.output(ENA_PIN, GPIO.LOW)
+
             # Проверка таймаута
             if time.time() - last_packet_time > TIMEOUT_SECONDS:
                 steer = 0
                 throttle = 0
                 brake = 0
-                motor.set_speed(0, 0, 0)
                 motor.drive(0, selector)
                 motor.brake(0)
                 if index % 500 == 0:
                     print(f"\nОбрыв связи", "Данные не получены, моторы остановлены")
             else:
                 if index % 100 == 0:
-                    print(f"{selector=:1d} | {steer=:4d} | {throttle=:3d}% | {brake=:3d}% | {target_angle=:4d} | {current_angle=:4d} | {diff=:4d} | {pwm_signal=:3d} | {pressed_buttons=}")
+                    print(f"{selector=:1d} | {steer=:4d} | {throttle=:3d}% | {brake=:3d}% | {current_steps=} | {pressed_buttons=}")
             
-            #time.sleep(DT)
+            #time.sleep(DELAY)
             
     except KeyboardInterrupt:
         stop_event.set()
         print("\nПрограмма остановлена")
     finally:
         motor.cleanup()
-        stop_event.set()  # Остановка потока перед закрытием сокета
-        time.sleep(0.2)  # Даем время потоку завершиться
+        stop_event.set()  # Остановка отдельного потока перед закрытием сокета
+        time.sleep(0.5)  # Даем время потоку завершиться
         try:
             sock.close()
         except Exception as e:

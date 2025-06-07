@@ -15,6 +15,9 @@ sock.settimeout(1.0)
 #----------------------------------------------
 PWM_PIN_LEFT = 26  # Пин для ШИМ левого поворота
 PWM_PIN_RIGHT = 20  # Пин для ШИМ правого поворота
+PIN_STEERING_LEFT = 26
+PIN_STEERING_RIGHT = 20
+PWM_STEERING = 13
 #-----------Передний левый мотор-----------------------------------
 PIN_FRONT_LEFT_DRIVE = 19
 PIN_FRONT_LEFT_REVERSE = 16
@@ -40,8 +43,8 @@ OLD_MIN = 100
 OLD_MAX = -100
 # NEW_MIN = 950
 # NEW_MAX = 1840
-NEW_MIN = 100
-NEW_MAX = 4000
+NEW_MIN = 1050
+NEW_MAX = 1780
 #---------------------------------------------
 state_lock = threading.Lock()
 global_state = {
@@ -71,19 +74,20 @@ class MotorController:
         GPIO.setup(PWM_PIN_FRONT_RIGHT, GPIO.OUT)
         GPIO.setup(PIN_FRONT_RIGHT_DRIVE, GPIO.OUT)
         GPIO.setup(PIN_FRONT_RIGHT_REVERSE, GPIO.OUT)
+        GPIO.setup(PWM_STEERING, GPIO.OUT)
+        GPIO.setup(PIN_STEERING_LEFT, GPIO.OUT)
+        GPIO.setup(PIN_STEERING_RIGHT, GPIO.OUT)
 
         # Инициализация I2C
         self.bus = smbus2.SMBus(I2C_BUS)
 
         # Инициализация ШИМ
-        self.pwm_left = GPIO.PWM(PWM_PIN_LEFT, 300)
-        self.pwm_right = GPIO.PWM(PWM_PIN_RIGHT, 300)
-
+        self.pwm_steering = GPIO.PWM(PWM_STEERING, 300)
+        
         self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 50)
         self.pwm_front_right = GPIO.PWM(PWM_PIN_FRONT_RIGHT, 50)
 
-        self.pwm_left.start(0)
-        self.pwm_right.start(0)
+        self.pwm_steering.start(0)
         
         self.pwm_front_left.start(0)
         self.pwm_front_right.start(0)
@@ -95,8 +99,9 @@ class MotorController:
         if right_speed < 0 or right_speed > 100:
             raise ValueError("Скорость правого двигателя должна быть в  диапазоне 0-100%")
 
-        self.pwm_left.ChangeDutyCycle(left_speed)
-        self.pwm_right.ChangeDutyCycle(right_speed)
+        self.pwm_steering.ChangeDutyCycle(100)
+        GPIO.output(PIN_STEERING_LEFT, left_speed)
+        GPIO.output(PIN_STEERING_RIGHT, right_speed)
 
     def read_encoder(self):
         try:
