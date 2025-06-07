@@ -16,7 +16,7 @@ import keyboard
 #-------Настройки---------------
 SERVER_IP = config('SERVER_IP')
 SERVER_PORT = config('SERVER_PORT', cast=int)
-STEERING_MAX_DEGREES = 300 # угол поворота руля
+STEERING_MAX_DEGREES = 300 # угол поворота руля 
 DAMPER_FORCE = 100  # усилие 0-100%
 OLD_MIN = -STEERING_MAX_DEGREES
 OLD_MAX = STEERING_MAX_DEGREES

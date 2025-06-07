@@ -2,7 +2,7 @@ import cv2
 import time
 from decouple import config, Csv
 
-# Загрузка источников видео из конфигурации
+# Загрузка источников видео из конфигурации 
 try:
     video_sources = config('video_sources', cast=Csv())
     if not video_sources:
