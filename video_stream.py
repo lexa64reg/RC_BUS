@@ -1,6 +1,35 @@
 import cv2
 import time
 from decouple import config, Csv
+import threading
+import routeros_api
+import keyboard
+
+# Параметры подключения к роутеру
+HOST = config('MIKROTIK_IP')  
+USERNAME = config('MIKROTIK_LOGIN')  
+PASSWORD = config('MIKROTIK_PASS')        
+PORT = config('MIKROTIK_PORT_API')    
+
+# Инициализация подключения к MikroTik
+try:
+    connection = routeros_api.RouterOsApiPool(
+        host=HOST,
+        username=USERNAME,
+        password=PASSWORD,
+        port=PORT,
+        use_ssl=False,  # Установите True, если используете API-SSL
+        plaintext_login=True
+    )
+    api = connection.get_api()
+except Exception as e:
+    print(f"Ошибка инициализации соединения с роутером: {str(e)}")
+    connection = None
+    api = None
+#-------------------------------------------
+voltage = "N/A"
+voltage_lock = threading.Lock()
+run = True
 
 # Загрузка источников видео из конфигурации 
 try:
@@ -16,12 +45,44 @@ current_source = 0
 # Максимальное количество попыток подключения к одному источнику
 MAX_RETRIES = 1
 
+def get_voltage():
+    global api
+    try:
+        if api is None:
+            print("API не инициализировано")
+            return None
+        # Получаем данные из /system/health
+        health = api.get_resource('/system/health')
+        health_data = health.get()
+
+        # Ищем значение напряжения
+        for item in health_data:
+            if 'name' in item and item['name'] == 'voltage':
+                voltage_value = item.get('value', 'N/A')
+                #print(f"Напряжение: {voltage_value}V")
+                time.sleep(0.01)
+                break
+        return voltage_value
+
+    except Exception as e:
+        print(f"Ошибка получения данных с роутера: {str(e)}")
+        return None
+
+def voltage_thread():
+    global voltage, run
+    while run:
+        new_voltage = get_voltage()
+        with voltage_lock:
+            if new_voltage is not None:
+                voltage = new_voltage
+        time.sleep(2)
+
 def open_stream(source_index):
     """Открывает видеопоток по указанному индексу."""
     try:
         cap = cv2.VideoCapture(video_sources[source_index])
         if not cap.isOpened():
-            print(f"Ошибка открытия потока {source_index + 1}: {video_sources[source_index]}")
+            print(f"Ошибка открытия потока {source_index + 1}")
             return None
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 0)  # Установка минимального буфера (зависит от бэкенда)
         time.sleep(1)  # Ожидание инициализации потока
@@ -33,6 +94,7 @@ def open_stream(source_index):
 def main():
     """Основная функция для отображения и переключения видеопотоков."""
     global current_source
+    global run
     
     # Попытка открыть начальный поток
     cap = open_stream(current_source)
@@ -45,6 +107,9 @@ def main():
         cv2.setWindowProperty(window_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 
     try:
+
+        voltage_thread_instance = threading.Thread(target=voltage_thread, daemon=True)
+        voltage_thread_instance.start()
         while True:
             # Проверяем, есть ли активный поток
             if cap is None:
@@ -93,6 +158,15 @@ def main():
                     window_name = None
                 continue
 
+
+            text = f"{voltage} V"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 1.0
+            color = (255, 255, 255)  # Белый цвет текста
+            thickness = 2
+            position = (10, 30)  # Положение текста (x=10, y=30 от верхнего левого угла)
+            cv2.putText(frame, text, position, font, font_scale, color, thickness, cv2.LINE_AA)
+
             # Обновление заголовка окна
             if window_name is not None:
                 cv2.setWindowTitle(window_name, f"Video Stream (Source {current_source + 1})")
@@ -100,7 +174,7 @@ def main():
 
             # Обработка нажатий клавиш
             key = cv2.waitKey(1)
-            if key == ord('v'):  # Переключение на следующий поток
+            if key == ord('v') or key == ord('V'):  # Переключение на следующий поток
                 if cap is not None:
                     cap.release()
                     cap = None
@@ -127,6 +201,8 @@ def main():
         print(f"Произошла ошибка: {e}")
     finally:
         # Освобождение ресурсов
+        if connection is not None:
+            connection.disconnect()
         if cap is not None:
             cap.release()
         if window_name is not None:
@@ -134,6 +210,7 @@ def main():
                 cv2.destroyAllWindows()
             except cv2.error:
                 pass  # Игнорируем ошибку, если окна не существуют
+        run = False
 
 if __name__ == "__main__":
     main()

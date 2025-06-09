@@ -7,31 +7,21 @@ import time
 import os
 from plyer import notification
 from decouple import config, Csv
-import paramiko
-import threading
-import routeros_api
 import subprocess
 import keyboard
-
 #-------Настройки---------------
-SERVER_IP = config('SERVER_IP')
+SERVER_IP = config('SERVER_IP2')
 SERVER_PORT = config('SERVER_PORT', cast=int)
-STEERING_MAX_DEGREES = 300 # угол поворота руля 
+STEERING_MAX_DEGREES = 300  # угол поворота руля 
 DAMPER_FORCE = 100  # усилие 0-100%
 OLD_MIN = -STEERING_MAX_DEGREES
 OLD_MAX = STEERING_MAX_DEGREES
 NEW_MIN = -100
 NEW_MAX = 100
-# Параметры подключения к роутеру
-HOST = config('MIKROTIK_IP')  
-USERNAME = config('MIKROTIK_LOGIN')  
-PASSWORD = config('MIKROTIK_PASS')        
-PORT = config('MIKROTIK_PORT_API')    
 #------Инициализация----------------
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 #-------------------------------------------
-voltage = ""
 command = ["python", "video_stream.py"]
 
 def normalize_axis(val):
@@ -53,38 +43,6 @@ def show_notification(title, message):
         timeout=15  # время показа в секундах
     )
 #----------------------------------
-def get_voltage():
-    try:
-        # Подключаемся к роутеру через API
-        connection = routeros_api.RouterOsApiPool(
-            host=HOST,
-            username=USERNAME,
-            password=PASSWORD,
-            port=PORT,
-            use_ssl=False,  # Установите True, если используете API-SSL
-            plaintext_login=True
-        )
-        api = connection.get_api()
-
-        # Получаем данные из /system/health
-        health = api.get_resource('/system/health')
-        health_data = health.get()
-
-        # Ищем значение напряжения
-        for item in health_data:
-            if 'name' in item and item['name'] == 'voltage':
-                voltage = item.get('value', 'N/A')
-                #print(f"Напряжение: {voltage}V")
-                #time.sleep(0.01)
-                break
-        # Закрываем соединение
-        connection.disconnect()
-        return voltage
-
-    except Exception as e:
-        print(f"Ошибка соединения с роутером: {str(e)}")
-
-
 controller = LogitechController()
 if not controller.steering_initialize(False):
     print(f"Руль не найден, выход")
@@ -98,10 +56,11 @@ if not controller.is_connected(0):
     exit(1)
 
 try:
-    stream=subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    print(f"Запуск видеопотока...")
+    stream = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr, text=True)
     controller.set_operating_range(0, STEERING_MAX_DEGREES)
     # controller.play_spring_force(0, 0, 100, 40)
-    index=1
+    index = 1
     run = True
     while run:
         index += 1
@@ -117,7 +76,7 @@ try:
             controller.steering_shutdown()
             stream.terminate()
             stream.wait()
-            run=False
+            run = False
             exit(1)
 
         raw_steer = state.lX
@@ -132,13 +91,10 @@ try:
         brake_pct = axis_to_percent(normalize_axis(raw_brake))
         clutch_pct = axis_to_percent(normalize_axis(raw_clutch))
 
-
         if brake_pct > 80 or any(element in [4, 5, 19, 20] for element in buttons):
             controller.play_bumpy_road_effect(0, 2)
-            
         else:
             controller.stop_bumpy_road_effect(0)
-        
         
         controller.play_leds(0, throttle_pct, 10, 140) 
 
@@ -149,7 +105,6 @@ try:
             controller.stop_spring_force(0)
 
         axes = {
-
             'steer': steer_deg,
             'throttle': throttle_pct,
             'brake': brake_pct,
@@ -162,27 +117,23 @@ try:
 
         # Отправка
         sock.sendto(json.dumps(payload).encode(), (SERVER_IP, SERVER_PORT))
-        if index % 100 == 0:
-            #voltage=get_voltage()
-            print(f"[Steering: {steer_deg:4d}° | Throttle: {throttle_pct:3d}% | Brake: {brake_pct:3d}%] | Clutch: {clutch_pct:3d} | {buttons} | {voltage=} ")
-            voltage=""
-        
+        if index % 500 == 0:
+            print(f"Steering: {steer_deg:4d}° | Throttle: {throttle_pct:3d}% | Brake: {brake_pct:3d}% | Clutch: {clutch_pct:3d} | {buttons=}")
+                    
         time.sleep(0.01)
         
-        if keyboard.is_pressed('r'): 
+        if keyboard.is_pressed('r') or keyboard.is_pressed('R'): 
             if stream.poll() is not None:
                 print("Перезапуск потока")
-                stream=subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                stream = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=sys.stdout, stderr=sys.stderr, text=True)
         elif keyboard.is_pressed('esc'): 
             stream.terminate()
             stream.wait()
-            run=False
-        elif keyboard.is_pressed('a'): 
-            voltage=get_voltage()
-        
+            run = False
 
 except KeyboardInterrupt:
     print('exit')
     
 finally:
+    sock.close()
     controller.steering_shutdown()

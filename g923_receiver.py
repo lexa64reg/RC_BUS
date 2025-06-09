@@ -56,8 +56,8 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('0.0.0.0', LISTEN_PORT))
 sock.settimeout(2.0)
 
-def convert_range(value, old_min, old_max, new_min, new_max):
-    return ((value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
+# def convert_range(value, old_min, old_max, new_min, new_max):
+#     return ((value - old_min) / (old_max - old_min)) * (new_max - new_min) + new_min
 
 class MotorController:
     def __init__(self):
@@ -81,9 +81,9 @@ class MotorController:
         GPIO.setup(ENA_PIN, GPIO.OUT)
         
         # Сброс возможных ошибок на шаговом моторе
-        GPIO.output(ENA_PIN, GPIO.HIGH)
-        time.sleep(0.5)
-        GPIO.output(ENA_PIN, GPIO.LOW)
+        # GPIO.output(ENA_PIN, GPIO.HIGH)
+        # time.sleep(0.2)
+        # GPIO.output(ENA_PIN, GPIO.LOW)
 
         # Инициализация ШИМ
         self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 50)
@@ -264,21 +264,27 @@ def packet_receiver(stop_event):
             print(f"\nНепредвиденная ошибка: {e}")
 
 def step_motor_init(): # Выворачиваем колеса влево до упора и ошибки положения и делаем ресет мотора
+    global current_steps
+    # Сброс возможной ошибки на моторе
+    GPIO.output(ENA_PIN, GPIO.HIGH)
+    time.sleep(0.2)
+    GPIO.output(ENA_PIN, GPIO.LOW)
     print(f"Инициализация рулевого двигателя...")
     for _ in range(abs(2500)):
         GPIO.output(PUL_PIN, GPIO.HIGH)
         time.sleep(DELAY_INIT)
         GPIO.output(PUL_PIN, GPIO.LOW)
         time.sleep(DELAY_INIT)
-    print(f"Reset step motor")
+    print(f"Сброс мотора в начальном положении")
     GPIO.output(ENA_PIN, GPIO.HIGH)
-    time.sleep(0.5)
+    time.sleep(0.2)
     GPIO.output(ENA_PIN, GPIO.LOW)
+    current_steps = -500
 
 def main():
     global selector
     stop_event = threading.Event()
-    receiver_thread = threading.Thread(target=packet_receiver, args=(stop_event,), daemon=False)
+    receiver_thread = threading.Thread(target=packet_receiver, args=(stop_event,), daemon=True)
     receiver_thread.start()
     motor = MotorController()
     index=1
@@ -292,8 +298,7 @@ def main():
                 throttle = global_state["throttle"]
                 brake = global_state["brake"]
                 pressed_buttons = global_state["buttons"]
-
-                       
+    
             # Обработка кнопок
             if pressed_buttons == [20] or pressed_buttons == [5]:
                 selector = 0  # Назад
@@ -316,8 +321,6 @@ def main():
                     motor.drive(throttle, selector)
                 motor.brake(brake)
             
-            
-
             # Проверка таймаута
             index += 1
             if time.time() - last_packet_time > TIMEOUT_SECONDS:
@@ -326,12 +329,12 @@ def main():
                 brake = 0
                 motor.drive(0, selector)
                 motor.brake(0)
-                if index % 800 == 0:
+                if index % 1500 == 0:
                     print(f"\nОбрыв связи", "Данные не получены, моторы остановлены")
 
             else:
-                if index % 800 == 0:
-                    print(f"{selector=:1d} | {steer=:4d} | {throttle=:3d}% | {brake=:3d}% | {current_steps=} | {pressed_buttons=}")
+                if index % 1500 == 0:
+                    print(f"{selector=:1d} | {steer=:4d} | {throttle=:3d}% | {brake=:3d}% | {current_steps=:3d} | {pressed_buttons=}")
             
             time.sleep(DELAY)
             
