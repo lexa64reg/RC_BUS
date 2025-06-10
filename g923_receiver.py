@@ -1,7 +1,6 @@
 import socket
 import json
 import RPi.GPIO as GPIO
-import smbus2
 import time
 import threading
 import math
@@ -86,10 +85,10 @@ class MotorController:
         # GPIO.output(ENA_PIN, GPIO.LOW)
 
         # Инициализация ШИМ
-        self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 50)
-        self.pwm_front_right = GPIO.PWM(PWM_PIN_FRONT_RIGHT, 50)
-        self.pwm_rear_left = GPIO.PWM(PWM_PIN_REAR_LEFT, 50)
-        self.pwm_rear_right = GPIO.PWM(PWM_PIN_REAR_RIGHT, 50)
+        self.pwm_front_left = GPIO.PWM(PWM_PIN_FRONT_LEFT, 1500)
+        self.pwm_front_right = GPIO.PWM(PWM_PIN_FRONT_RIGHT, 1500)
+        self.pwm_rear_left = GPIO.PWM(PWM_PIN_REAR_LEFT, 1500)
+        self.pwm_rear_right = GPIO.PWM(PWM_PIN_REAR_RIGHT, 1500)
         self.pwm_front_left.start(0)
         self.pwm_front_right.start(0)
         self.pwm_rear_left.start(0)
@@ -158,7 +157,7 @@ class MotorController:
 
     def brake(self, speed):
         if speed >= 1:
-            speed = self.logarithmic(speed)
+            #speed = self.logarithmic(speed)
             self.pwm_front_left.ChangeDutyCycle(speed)
             GPIO.output(PIN_FRONT_LEFT_DRIVE, GPIO.LOW)
             GPIO.output(PIN_FRONT_LEFT_REVERSE, GPIO.LOW)
@@ -267,7 +266,7 @@ def step_motor_init(): # Выворачиваем колеса влево до �
     global current_steps
     # Сброс возможной ошибки на моторе
     GPIO.output(ENA_PIN, GPIO.HIGH)
-    time.sleep(0.2)
+    time.sleep(0.5)
     GPIO.output(ENA_PIN, GPIO.LOW)
     print(f"Инициализация рулевого двигателя...")
     for _ in range(abs(2500)):
@@ -277,7 +276,7 @@ def step_motor_init(): # Выворачиваем колеса влево до �
         time.sleep(DELAY_INIT)
     print(f"Сброс мотора в начальном положении")
     GPIO.output(ENA_PIN, GPIO.HIGH)
-    time.sleep(0.2)
+    time.sleep(0.5)
     GPIO.output(ENA_PIN, GPIO.LOW)
     current_steps = -500
 
@@ -305,15 +304,11 @@ def main():
             elif pressed_buttons == [19] or pressed_buttons == [4]:
                 selector = 1  # Вперед
             if pressed_buttons ==[0, 1, 2, 3, 11]:
-                GPIO.output(ENA_PIN, GPIO.HIGH)
-                time.sleep(0.001)
-                GPIO.output(ENA_PIN, GPIO.LOW)
-            if pressed_buttons ==[11] or pressed_buttons ==[10]:
-                if pressed_buttons ==[11]:
-                    direction = 0
-                elif pressed_buttons ==[10]:
-                    direction = 1
-                motor.tank_turn(direction, throttle, brake)
+                step_motor_init()
+            if pressed_buttons == [11]:
+                motor.tank_turn(0, throttle, brake)
+            elif pressed_buttons == [10]:
+                motor.tank_turn(1, throttle, brake)
             else:
                 # Управление движением
                 motor.rotate_to_position(steer)
@@ -331,11 +326,9 @@ def main():
                 motor.brake(0)
                 if index % 1500 == 0:
                     print(f"\nОбрыв связи", "Данные не получены, моторы остановлены")
-
             else:
                 if index % 1500 == 0:
-                    print(f"{selector=:1d} | {steer=:4d} | {throttle=:3d}% | {brake=:3d}% | {current_steps=:3d} | {pressed_buttons=}")
-            
+                    print(f"{selector=:1d} | {steer=:4d} | {throttle=:3d}% | {brake=:3d}% | {current_steps=:4d} | {pressed_buttons=}")    
             time.sleep(DELAY)
             
     except KeyboardInterrupt:

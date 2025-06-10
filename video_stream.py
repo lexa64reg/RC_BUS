@@ -3,7 +3,8 @@ import time
 from decouple import config, Csv
 import threading
 import routeros_api
-import keyboard
+api = None
+connection = None
 
 # Параметры подключения к роутеру
 HOST = config('MIKROTIK_IP')  
@@ -12,25 +13,27 @@ PASSWORD = config('MIKROTIK_PASS')
 PORT = config('MIKROTIK_PORT_API')    
 
 # Инициализация подключения к MikroTik
-try:
-    connection = routeros_api.RouterOsApiPool(
-        host=HOST,
-        username=USERNAME,
-        password=PASSWORD,
-        port=PORT,
-        use_ssl=False,  # Установите True, если используете API-SSL
-        plaintext_login=True
-    )
-    api = connection.get_api()
-except Exception as e:
-    print(f"Ошибка инициализации соединения с роутером: {str(e)}")
-    connection = None
-    api = None
+def init_api():
+    global api, connection
+    try:
+        connection = routeros_api.RouterOsApiPool(
+            host=HOST,
+            username=USERNAME,
+            password=PASSWORD,
+            port=PORT,
+            use_ssl=False,  # Установите True, если используете API-SSL
+            plaintext_login=True
+        )
+        api = connection.get_api()
+    except Exception as e:
+        print(f"Ошибка инициализации соединения с роутером: {str(e)}")
+        connection = None
+        api = None
 #-------------------------------------------
 voltage = "N/A"
 voltage_lock = threading.Lock()
 run = True
-
+init_api()
 # Загрузка источников видео из конфигурации 
 try:
     video_sources = config('video_sources', cast=Csv())
@@ -50,6 +53,7 @@ def get_voltage():
     try:
         if api is None:
             print("API не инициализировано")
+            init_api()
             return None
         # Получаем данные из /system/health
         health = api.get_resource('/system/health')
@@ -60,7 +64,7 @@ def get_voltage():
             if 'name' in item and item['name'] == 'voltage':
                 voltage_value = item.get('value', 'N/A')
                 #print(f"Напряжение: {voltage_value}V")
-                time.sleep(0.01)
+                #time.sleep(0.01)
                 break
         return voltage_value
 
@@ -90,12 +94,10 @@ def open_stream(source_index):
     except Exception as e:
         print(f"Ошибка инициализации потока {source_index + 1}: {e}")
         return None
-
 def main():
     """Основная функция для отображения и переключения видеопотоков."""
     global current_source
     global run
-    
     # Попытка открыть начальный поток
     cap = open_stream(current_source)
     window_name = None
@@ -160,12 +162,23 @@ def main():
 
 
             text = f"{voltage} V"
-            font = cv2.FONT_HERSHEY_SIMPLEX
+            font = cv2.FONT_HERSHEY_DUPLEX
             font_scale = 1.0
             color = (255, 255, 255)  # Белый цвет текста
             thickness = 2
             position = (10, 30)  # Положение текста (x=10, y=30 от верхнего левого угла)
-            cv2.putText(frame, text, position, font, font_scale, color, thickness, cv2.LINE_AA)
+            height, width = frame.shape[:2]
+
+            # Вычисляем размер текста
+            (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+
+            # Рассчитываем координаты для центрирования по горизонтали и размещения внизу
+            x = (width - text_width) // 2  # Центр по горизонтали
+            y = height - 10 - baseline  # 10 пикселей отступа от нижнего края
+
+            # Наложение текста на кадр
+            cv2.putText(frame, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
+            #cv2.putText(frame, text, position, font, font_scale, color, thickness, cv2.LINE_AA)
 
             # Обновление заголовка окна
             if window_name is not None:

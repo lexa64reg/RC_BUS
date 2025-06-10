@@ -10,7 +10,7 @@ from decouple import config, Csv
 import subprocess
 import keyboard
 #-------Настройки---------------
-SERVER_IP = config('SERVER_IP2')
+SERVER_IP = config('SERVER_IP')
 SERVER_PORT = config('SERVER_PORT', cast=int)
 STEERING_MAX_DEGREES = 300  # угол поворота руля 
 DAMPER_FORCE = 100  # усилие 0-100%
@@ -40,7 +40,7 @@ def show_notification(title, message):
         message=message,
         app_name="RC_BUS",
         app_icon="bus.ico",
-        timeout=15  # время показа в секундах
+        timeout=10  # время показа в секундах
     )
 #----------------------------------
 controller = LogitechController()
@@ -68,7 +68,6 @@ try:
         state = controller.get_state_engines(0).contents
         if not controller.is_connected(0):
             print(f"Руль не найден, выход")
-            show_notification("Ошибка!", "Руль не найден")
             steer_deg = 0
             throttle_pct = 0
             brake_pct = 0
@@ -78,6 +77,8 @@ try:
             stream.wait()
             run = False
             exit(1)
+            show_notification("Ошибка!", "Руль не найден")
+            break
 
         raw_steer = state.lX
         raw_throttle = state.lZ
